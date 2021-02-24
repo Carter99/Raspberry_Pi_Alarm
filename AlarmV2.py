@@ -61,6 +61,8 @@ def TextUpdate():
 		AlarmPage()
 	elif page==1:
 		AmbientLightPage()
+	elif page==2:
+		TimeSetPage()
 
 def CursorUpdate():
 	global cursorLocation
@@ -72,12 +74,20 @@ def CursorUpdate():
 
 # Pages
 
+# Page -2
+def AlarmBlaringPage():
+	lcd.backlight=1
+	lcd.cursor_position(0,0)
+	lcd.message="Wakey Wakey!    \nEggs and Bakey! "
+
+# Page -1
 def SleepPage():
 	lcd.backlight=0
 	lcd.clear()
 	lcd.cursor_position(0,0)
-	lcd.message = "Current Time    \n"+datetime.datetime.today().strftime(' %d/%m/%y %H')+":"+datetime.datetime.today().strftime('%M ')
+	lcd.message = "Current Time:   \n"+datetime.datetime.today().strftime('      %H:%M     ')
 
+# Page 0
 def AlarmPage():
 	global alarmHour,alarmMin,alarm
 	if alarm:
@@ -88,12 +98,7 @@ def AlarmPage():
 	lcd.message="Alarm: "+state+" \n\x01\x02 "+PrePad(str(alarmHour),2)+":"+PrePad(str(alarmMin),2)+"T       "
 	CursorUpdate()
 
-def AlarmBlaringPage():
-	lcd.backlight=1
-	lcd.cursor_position(0,0)
-	lcd.message="Wakey Wakey!    \nEggs and Bakey! "
-
-
+# Page 1
 def AmbientLightPage():
 	global lightCurve
 	if brightnessIndex==0:
@@ -113,10 +118,22 @@ def AmbientLightPage():
 	CursorUpdate()
 	PwmUpdate(lightCurve[brightnessIndex])
 
+# Page 2
+def TimeSetPage():
+	global systemHour,systemMin
+	lcd.cursor_position(0,0)
+	lcd.message="System Time:    \n\x01\x02 "+PrePad(str(systemHour),2)+":"+PrePad(str(systemMin),2)+"A       "
+	CursorUpdate()
+
+
+# INITIATION VARIABLES
+
+systemHour=10
+systemMin=9
 lightCurve=[0,6.25,12.5,25,50,100]
 dutyCycle=0
 brightnessIndex=0
-cursorLocation=3
+cursorLocation=2
 page=-1
 button=-1
 lcd.blink=1
@@ -136,13 +153,13 @@ while True:
 	button=ButtonCheck()
 	if button!=-1:	# RUNS THE ENCLOSED IF THERE HAS BEEN A BUTTON PRESS
 		lastPress=time.time()
-		if page==-1:
+		if page==-1:	# when there is a user interaction this clause will exit the page from the passive time displaying mode to page 0, the alarm setting page.
 			page=0
 			cursorLocation=2
 			lcd.backlight=1
 			CursorUpdate()
 			TextUpdate()
-		elif page==-2:
+		elif page==-2:  # when there is a user interaction this clause will exit the page from the alarm blaring mode to page 0, the alarm setting page.
 			alarm=False
 			page=0
 			CursorUpdate()
@@ -168,7 +185,7 @@ while True:
 					page-=1
 				elif cursorLocation==1:
 					page+=1
-				page%=2 	#Currently set to 2 as only really two navigatable pages, increase if more pages added
+				page%=3 	#Currently set to 3 as only really three navigatable pages [0,1,2], increase if more pages added
 
 				if page==0:
 					# Do the things that the alarm setting page would require
@@ -196,6 +213,20 @@ while True:
 					elif cursorLocation==4:
 						brightnessIndex+=1
 					brightnessIndex%=6
+				elif page==2:
+					# Do the things that the system time setting page would require
+					if cursorLocation==3:
+						systemHour+=10
+					elif cursorLocation==4:
+						systemHour+=1
+					elif cursorLocation==6:
+						systemMin+=10
+					elif cursorLocation==7:
+						systemMin+=1
+					elif cursorLocation==8:
+						# RUN THE OS LIBRARY COMMAND TO SET THE SYSTEM TIME TO AN ARBITARY DATE WITH THE TIME AS DEFINED BY THE AFORMENTIONED VARIABLES
+					alarmHour%=24
+					alarmMin%=60
 				TextUpdate()
 		time.sleep(0.2)
 
@@ -205,14 +236,13 @@ while True:
 			page=-2
 			TextUpdate()
 		Luminosity=100*math.exp((math.log(0.005)/lightRampUpTime)*tMinus) #RANGES FROM 0-1 OVER THE COURSE OF THE 'LightRampUpTime' DURATION, REACHING 1 AT THE 'alarmUnix' TIMESTAMP
-		if tMinus<0:
-			if tMinus%2>1:
-				Luminosity=100
-			else:
-				Luminosity=5
+		if tMinus<0:							# Runs when the alarm time is expired whilst the user still hasn't interacted to turn it off.
+			Luminosity=40*math.cos(tMinus)+60 	# Causes the light to pulse in a sinusoid pattern of period ~6.3s 
 		PwmUpdate(Luminosity)
 	elif time.time()>lastPress+displayOff:
 		lastPress=time.time()
+		systemHour=int(datetime.datetime.today().strftime('%H'))
+		systemMin=int(datetime.datetime.today().strftime('%M'))
 		page=-1
 		TextUpdate()
 	time.sleep(0.1)
