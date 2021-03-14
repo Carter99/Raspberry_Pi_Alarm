@@ -5,6 +5,7 @@ import adafruit_character_lcd.character_lcd as characterlcd
 import RPi.GPIO as GPIO
 import datetime
 import math
+import os
 
 lcd_rs = digitalio.DigitalInOut(board.D26)
 lcd_en = digitalio.DigitalInOut(board.D19)
@@ -85,7 +86,7 @@ def SleepPage():
 	lcd.backlight=0
 	lcd.clear()
 	lcd.cursor_position(0,0)
-	lcd.message = "Current Time:   \n"+datetime.datetime.today().strftime('      %H:%M     ')
+	lcd.message = "Current Time:   \n"+datetime.datetime.today().strftime('   %H:%M        ')
 
 # Page 0
 def AlarmPage():
@@ -122,7 +123,7 @@ def AmbientLightPage():
 def TimeSetPage():
 	global systemHour,systemMin
 	lcd.cursor_position(0,0)
-	lcd.message="System Time:    \n\x01\x02 "+PrePad(str(systemHour),2)+":"+PrePad(str(systemMin),2)+"A       "
+	lcd.message="System Time:    \n\x01\x02 "+PrePad(str(systemHour),2)+":"+PrePad(str(systemMin),2)+"A      R"
 	CursorUpdate()
 
 
@@ -144,7 +145,7 @@ alarm=False
 alarmUnix=0
 lastPress=0
 lightRampUpTime=600
-lightRampDownTime=60
+lightRampDownTime=90
 displayOff=15
 
 
@@ -166,9 +167,12 @@ while True:
 			TextUpdate()
 			deactivationTime=time.time()
 			tPlus=0
+			startLuminosity=100*math.exp((math.log(0.005)/lightRampUpTime)*tMinus)
+			if startLuminosity>100:
+				startLuminosity=100
 			while tPlus<lightRampDownTime:
 				tPlus=time.time()-deactivationTime
-				Luminosity=50*math.exp((math.log(0.005)/lightRampDownTime)*tPlus)
+				Luminosity=startLuminosity*math.exp((math.log(0.005)/lightRampDownTime)*tPlus)
 				PwmUpdate(Luminosity)
 				time.sleep(0.1)
 			PwmUpdate(0)
@@ -224,9 +228,18 @@ while True:
 					elif cursorLocation==7:
 						systemMin+=1
 					elif cursorLocation==8:
-						# RUN THE OS LIBRARY COMMAND TO SET THE SYSTEM TIME TO AN ARBITARY DATE WITH THE TIME AS DEFINED BY THE AFORMENTIONED VARIABLES
-					alarmHour%=24
-					alarmMin%=60
+						systemString="sudo date -u 1101"+PrePad(str(systemHour),2)+PrePad(str(systemMin),2)+"21"
+						alarm=False
+						print(systemString)
+						os.system(systemString)
+					elif cursorLocation==15:
+						lcd.clear()
+						lcd.cursor_position(0,0)
+						lcd.message = "REBOOTING       \nNOW...          "
+						os.system("sudo reboot now")
+						time.sleep(5)
+					systemHour%=24
+					systemMin%=60
 				TextUpdate()
 		time.sleep(0.2)
 
@@ -235,7 +248,7 @@ while True:
 		if page!=-2:
 			page=-2
 			TextUpdate()
-		Luminosity=100*math.exp((math.log(0.005)/lightRampUpTime)*tMinus) #RANGES FROM 0-1 OVER THE COURSE OF THE 'LightRampUpTime' DURATION, REACHING 1 AT THE 'alarmUnix' TIMESTAMP
+		Luminosity=100*math.exp((math.log(0.005)/lightRampUpTime)*tMinus) #RANGES FROM 0-100 OVER THE COURSE OF THE 'LightRampUpTime' DURATION, REACHING 1 AT THE 'alarmUnix' TIMESTAMP
 		if tMinus<0:							# Runs when the alarm time is expired whilst the user still hasn't interacted to turn it off.
 			Luminosity=40*math.cos(tMinus)+60 	# Causes the light to pulse in a sinusoid pattern of period ~6.3s 
 		PwmUpdate(Luminosity)
